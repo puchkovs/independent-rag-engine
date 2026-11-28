@@ -18,26 +18,29 @@ that belong to the owner. Nothing here tags, publishes or licenses anything.
 | API contract | `docs/openapi.json`, compared in the tests |
 | Documentation | README, architecture, API, CLI, operations, evaluation, testing, ADRs, security policy, provenance |
 
-## Open before a release can claim quality
+## Blockers for v0.1.0 Alpha (2026-11-28)
 
-These are not packaging problems; they are the project's open criteria and none is closed:
+An Alpha is a statement that the engine works and is installable, not that its quality is proven.
+Nothing technical stops the tag; what stops a *quality claim* is below, and the release notes must
+carry the open items as known limitations.
 
-1. **Sufficiency gate:** 72.5 % correct refusals at 4.2 % false refusals on an independent held-out,
-   unreviewed set with the reranker, 32.5 % with dense alone, against targets of 90 % and 10 %
-   ([EVALUATION.md](EVALUATION.md), [AUDIT.md](AUDIT.md)). A user can now calibrate the gate on their
-   own index (`rag calibrate`, [CALIBRATION.md](CALIBRATION.md)); until they do it is open and says so.
-2. **No real language model has run through the pipeline**, so answer latency, faithfulness and
-   hallucination rate are unmeasured; the memory gate refused the 4B model on the reference machine
-   ([LLM_VERIFICATION.md](LLM_VERIFICATION.md) says how to run it elsewhere).
-3. **No evaluation label has been reviewed by a person**; the criterion of 100 reviewed questions is
-   unmet and no judge is calibrated.
-4. **The one-hour soak** covers search only; see [TESTING.md](TESTING.md) for its result. The harder
-   variant (`--workers`, `--churn-every`) exists but has not been run: it needs 2.5 GiB of free
-   memory and the reference machine had 1.9–2.4 GiB while the desktop was in use.
-5. **The database is about 5.6× the source text without vectors** against a target of about 3×
-   ([AUDIT.md](AUDIT.md), F-2). The owner chose to ship first and migrate afterwards
-   ([ADR 0022](adr/0022-slimmer-storage.md)); the target stays as written and the release notes must
-   say the database is larger than it.
+**Needed from the owner before the tag** (none is technical):
+
+1. The decision to tag `v0.1.0` and to call it an Alpha / pre-release, and to publish (repository
+   visibility, description, topics, whether to publish the image or the package).
+2. A read of the open items below, so the release notes say exactly what is and is not proven.
+
+**Open criteria, none closed and none weakened** (they block claims, not the tag):
+
+| # | Item | State |
+|---|---|---|
+| 1 | Sufficiency gate quality | 72.5 % correct refusals at 4.2 % false refusals on an independent held-out set, with the reranker; 32.5 % with dense alone; targets 90 % and 10 % ([EVALUATION.md](EVALUATION.md), [AUDIT.md](AUDIT.md)). A user can calibrate their own gate (`rag calibrate`, [CALIBRATION.md](CALIBRATION.md)); until then it is open and says so |
+| 2 | Real language model | never run through the pipeline: the memory gate refused the 4B model (needs 4.1 GiB, 3.2 available); [LLM_VERIFICATION.md](LLM_VERIFICATION.md) says how to run it elsewhere |
+| 3 | Human review of labels | none of the 185 questions of version 2 is reviewed (170 correct, 15 doubtful and 0 incorrect by the automatic audit); the 100-reviewed-questions criterion is unmet and no judge is calibrated; the page is `eval_runs/review_kit/review_kit.html` ([DATASET_REVIEW.md](DATASET_REVIEW.md)) |
+| 4 | Retrieval baseline | measured on version 2 for dense, hybrid and lexical ([BASELINE_V2.md](BASELINE_V2.md)); **reranking on version 2 not measured** (resource gate: 3.5 GiB needed, about 2.7 available); version 1 figures stand and are marked as such |
+| 5 | Soak | one hour of search passed; the harder variant (`--workers`, `--churn-every`) is written and not run (needs 2.5 GiB free; 1.9 to 2.7 available) |
+| 6 | Database size | 5.6× the source text without vectors against about 3×; migration planned after the release ([ADR 0022](adr/0022-slimmer-storage.md)); say so in the release notes |
+| 7 | Platforms | Linux and Python 3.12 / 3.13 verified in CI; macOS not verified |
 
 ## Decisions for the owner
 

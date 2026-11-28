@@ -15,6 +15,7 @@ import asyncio
 import hashlib
 import json
 import platform
+import resource
 import statistics
 import sys
 import tempfile
@@ -22,6 +23,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+import resource_guard
 
 from rag_engine.cli.main import main as rag
 from rag_engine.cli.search import load_details
@@ -34,6 +37,7 @@ from rag_engine.evaluation.dataset import (
     load_dataset,
     validate_dataset,
 )
+from rag_engine.evaluation.protocol import TestSplitGuard
 from rag_engine.evaluation.runner import (
     QuestionScore,
     RankedChunk,
@@ -114,6 +118,7 @@ def main() -> None:
     )
     parser.add_argument("--split", choices=("dev", "test", "all"), default="dev")
     parser.add_argument("--include-unreviewed", action="store_true")
+    parser.add_argument("--final", action="store_true", help="read the held-out test split")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
@@ -133,6 +138,13 @@ def main() -> None:
     if not questions:
         sys.exit("no accepted answerable questions; review the dataset or use --include-unreviewed")
     seed = args.seed if args.seed is not None else int(dataset.manifest_hash[:8], 16)
+    test_reads: int | None = None
+    if args.split in {"test", "all"}:  # the held-out split is read only on request, and counted
+        test_reads = TestSplitGuard(ROOT / "eval_runs" / "test_access.json").read(
+            dataset.identifier, final=args.final
+        )
+    resource_guard.require(1.2, what="the E5 embedding model")
+    resource_guard.watchdog()
 
     container = DefaultContainer()
     results: dict[str, Any] = {}
@@ -182,6 +194,8 @@ def main() -> None:
             "embedding_model": model,
             "index_generation": generation,
             "python": platform.python_version(),
+            "test_reads": test_reads,
+            "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
             "created": datetime.now(UTC).isoformat(timespec="seconds"),
         },
         "modes": results,
@@ -263,6 +277,7 @@ def render(report: dict[str, Any]) -> str:
         )
         lines.append(f"| {pair} | {row} |")
     lines += ["", "`*` the interval excludes zero.", "", "## Latency per stage (ms, p50 / p95)", ""]
+    lines.insert(2, f"peak resident memory of the process: {manifest['peak_rss_mib']} MiB")
     for mode, data in report["modes"].items():
         stages = ", ".join(
             f"{s} {v['p50']:.1f}/{v['p95']:.1f}" for s, v in data["latency_ms"].items()

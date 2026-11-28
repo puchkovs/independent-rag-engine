@@ -27,8 +27,7 @@ def main(args: list[str]) -> int:
     return _main(args, container=DefaultContainer())
 
 
-@pytest.fixture
-def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+def build_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corpus_name: str) -> list[str]:
     embedder = HashingEmbedder(32)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -46,7 +45,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     )  # fmt: skip
     monkeypatch.chdir(tmp_path)  # the test-access counter lives under ./eval_runs
     corpus = tmp_path / "corpus"
-    shutil.copytree(ROOT / "eval" / "corpus" / "mini_v1", corpus)
+    shutil.copytree(ROOT / "eval" / "corpus" / corpus_name, corpus)
     config = tmp_path / "rag.toml"
     config.write_text(
         '[parsing]\nisolate = []\n[embedding]\nenabled = true\nprovider = "ollama"\n'
@@ -56,6 +55,11 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     assert main([*prefix, "source", "add", "corpus", str(corpus)]) == 0
     assert main([*prefix, "ingest", "corpus", "--json"]) == 0
     return prefix
+
+
+@pytest.fixture
+def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    return build_workspace(tmp_path, monkeypatch, "mini_v1")
 
 
 def run(prefix: list[str], out: Path, *extra: str) -> int:
@@ -83,6 +87,34 @@ def test_a_run_with_the_committed_embedder_setup_passes_the_regression_gate(
     data = json.loads(out.read_text())
     assert data["flags"]["exploratory"] is True and data["manifest"]["embedding_model"]
     assert data["manifest"]["dataset_hash"] and data["manifest"]["corpus_hash"]
+
+
+@pytest.mark.parametrize(
+    ("corpus", "dataset", "baseline", "questions"),
+    [
+        ("mini_v1", "retrieval_mini_v2.json", "mini_hashing_dev_v2.json", 44),
+        ("hard_v1", "retrieval_hard_v2.json", "hard_hashing_dev_v2.json", 141),
+    ],
+)
+def test_the_version_2_datasets_pass_their_own_baselines(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    corpus: str,
+    dataset: str,
+    baseline: str,
+    questions: int,
+) -> None:
+    prefix = build_workspace(tmp_path, monkeypatch, corpus)
+    path = ROOT / "eval" / "datasets" / dataset
+    out = tmp_path / "run.json"
+    args = ["eval", "run", "--dataset", str(path), "--include-unreviewed", "--output", str(out)]
+    assert main([*prefix, *args, "--split", "dev", "--mode", "hybrid"]) == 0
+    capsys.readouterr()
+    assert main(["eval", "gate", str(out), str(ROOT / "baselines" / baseline)]) == 0
+    assert "no regression" in capsys.readouterr().out
+    assert main(["eval", "validate", str(path), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["questions"] == questions
 
 
 def test_a_change_that_makes_retrieval_worse_fails_the_gate_with_its_own_exit_code(

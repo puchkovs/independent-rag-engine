@@ -6,6 +6,12 @@ project until a release is cut.
 ## [Unreleased]
 
 ### Final audit and release hardening
+- Retrieval baseline recomputed on `retrieval-hard@v2` and `retrieval-mini@v2` (dense, hybrid, lexical;
+  hit@K, MRR, nDCG, recall, latency, memory), with a version 1 against version 2 comparison that
+  attributes every movement to the corrected questions: `docs/BASELINE_V2.md`. No retrieval code or
+  parameter changed. `retrieval_eval.py` now guards and counts reads of the test split and refuses
+  to start without memory for the model; `rerank_bakeoff.py` has the same resource gate. Regression
+  baselines for the hashing embedder on both v2 datasets.
 - Datasets: `retrieval_hard_v2` and `retrieval_mini_v2` correct the labelling errors the audit found
   (root cause fixed in `build_hard_dataset.py`, which now refuses a dataset the audit finds wrong on
   its face); version 1 is frozen, the history is in `eval/datasets/CHANGES_v2.json`, nothing is

@@ -164,6 +164,7 @@ eval/datasets/     versioned question sets
 - [Testing](docs/TESTING.md)
 - [Phase 4 embedding measurements](docs/EMBEDDING_BAKEOFF.md)
 - [Retrieval evaluation](docs/RETRIEVAL_EVALUATION.md)
+- [Retrieval baseline on dataset version 2](docs/BASELINE_V2.md)
 - [Reviewing an evaluation dataset](docs/DATASET_REVIEW.md)
 - [Calibrating the sufficiency gate](docs/CALIBRATION.md)
 - [Verifying a real language model](docs/LLM_VERIFICATION.md)

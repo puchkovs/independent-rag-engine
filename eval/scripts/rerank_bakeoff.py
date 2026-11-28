@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import resource_guard
 from retrieval_eval import ROOT, percentile, write_config
 
 from rag_engine.cli.main import main as rag
@@ -41,6 +42,7 @@ from rag_engine.evaluation.runner import QuestionScore, RankedChunk, compare, sc
 
 METRICS = ("hit@1", "mrr@10", "ndcg@10", "evidence@5")
 NAME = "BAAI/bge-reranker-v2-m3-int8"
+PEAK_GIB = 2.5  # peak resident memory measured with both models loaded (ADR 0014)
 
 
 def run(
@@ -116,6 +118,8 @@ def main() -> None:
     if not questions:
         sys.exit("no accepted answerable questions; review the dataset or use --include-unreviewed")
     seed = int(dataset.manifest_hash[:8], 16)
+    resource_guard.require(PEAK_GIB, what="the embedding model and the cross-encoder")
+    resource_guard.watchdog()
     rerank_dir = args.rerank_dir.resolve()
     fingerprint = model_directory_digest(rerank_dir)
     section = (

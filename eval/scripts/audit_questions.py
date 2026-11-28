@@ -16,13 +16,10 @@ import argparse
 import asyncio
 import csv
 import json
-import os
-import sys
-import threading
-import time
 from collections.abc import Sequence
 from pathlib import Path
 
+import resource_guard
 from retrieval_eval import ROOT
 
 from rag_engine.config import load_settings
@@ -32,30 +29,8 @@ from rag_engine.evaluation.question_audit import audit_source, summarize
 from rag_engine.evaluation.review_kit import load_source
 from rag_engine.system import SystemClock
 
-GIB = 1024**3
 DEFAULT = ("retrieval_hard_v2", "retrieval_mini_v2")
-START_MIN_AVAILABLE = int(2.3 * GIB)  # the model's ~1.2 GiB plus the 1 GiB headroom used elsewhere
-STOP_BELOW_AVAILABLE = int(0.45 * GIB)
-
-
-def available() -> int:
-    for line in Path("/proc/meminfo").read_text().splitlines():
-        if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) * 1024
-    return 0
-
-
-def watchdog() -> None:
-    """Leave the desktop alone: stop this process if free memory gets dangerously low."""
-
-    def watch() -> None:
-        while True:
-            if available() < STOP_BELOW_AVAILABLE:
-                sys.stderr.write("memory watchdog: free memory is too low, stopping\n")
-                os._exit(7)
-            time.sleep(0.5)
-
-    threading.Thread(target=watch, daemon=True).start()
+MODEL_GIB = 1.2  # resident memory measured for the E5 model
 
 
 class E5Encoder:
@@ -102,12 +77,8 @@ def main() -> None:
     paths = args.dataset or [ROOT / "eval/datasets" / f"{n}.json" for n in DEFAULT]
     encoder: E5Encoder | None = None
     if args.embed_dir is not None:
-        if available() < START_MIN_AVAILABLE:
-            print(json.dumps({"result": "refused_by_resource_gate",
-                              "available_gib": round(available() / GIB, 2),
-                              "needed_gib": round(START_MIN_AVAILABLE / GIB, 2)}))  # fmt: skip
-            sys.exit(3)
-        watchdog()
+        resource_guard.require(MODEL_GIB, what="the E5 embedding model")
+        resource_guard.watchdog()
         encoder = E5Encoder(args.embed_dir.resolve())
     report: dict[str, object] = {
         "semantic_layer": encoder is not None,
